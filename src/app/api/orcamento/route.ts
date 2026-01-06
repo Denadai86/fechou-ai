@@ -9,6 +9,8 @@ const googleAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+export const dynamic = 'force-dynamic'; // Força o Next.js a não tentar "buildar" essa rota como estática
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Autenticação COMPLETA
