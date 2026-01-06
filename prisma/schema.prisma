@@ -1,0 +1,150 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// 1. O USUÁRIO (VOCÊ/PRESTADOR)
+// ------------------------------------------------------
+model User {
+  id        String   @id // ID do Clerk (ex: user_2b9...)
+  email     String   @unique
+  name      String?
+  
+  // -- Identidade Visual e Marca --
+  companyName String?  // Nome fantasia (ex: Silva Elétrica)
+  logoUrl     String?  // URL da imagem da logomarca
+  themeColor  String   @default("#2563EB") // Cor principal do PDF (Azul padrão)
+  
+  // -- Dados de Contato e Endereço --
+  phone       String?  // WhatsApp para sair no orçamento
+  address     String?  // Endereço comercial
+  cpfCnpj     String?
+
+  // -- Financeiro (Para receber do cliente) --
+  pixKey      String?  // A chave PIX
+  pixHolder   String?  // Nome do titular da conta (passa credibilidade)
+  bankDetails String?  // Agência/Conta (opcional)
+
+  // -- Configurações --
+  signature   String?  @default("Agradecemos a preferência! Orçamento válido por 15 dias.")
+  
+  // -- Futuro: Assinatura SaaS (Monetização) --
+  plan             Plan     @default(FREE)
+  stripeCustomerId String?  // ID do cliente no Stripe/Asaas
+  credits          Int      @default(10) // Limite de orçamentos no plano Free
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  proposals Proposal[]
+  clients   Client[]   // Seu CRM de clientes
+}
+
+// ------------------------------------------------------
+// 2. O CLIENTE (CRM) - FUTURO 🔮
+// ------------------------------------------------------
+// Salva os clientes para reuso. "Ah, vou fazer outro serviço pra Dona Maria."
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?  // Obs: "Cliente chato" ou "Paga em dia"
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  proposals Proposal[] // Histórico de orçamentos deste cliente
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------
+// 3. O ORÇAMENTO (PROPOSTA)
+// ------------------------------------------------------
+model Proposal {
+  id          String   @id @default(cuid())
+  publicId    String   @unique @default(cuid()) // Token para link público (fechou.ai/p/XyZ...)
+  
+  // Dados do Serviço
+  title       String   // Título gerado pela IA (ex: "Instalação de Chuveiro")
+  description String?  @db.Text
+  
+  // Valores
+  totalAmount Decimal  @db.Decimal(10, 2) // Melhor que Float para dinheiro
+  validity    Int      @default(15) // Dias de validade
+
+  // Conteúdo Original (Auditoria da IA)
+  audioUrl      String?
+  transcription String? @db.Text // O que o usuário falou
+  
+  // Status (Workflow)
+  status      ProposalStatus @default(DRAFT)
+  viewCount   Int            @default(0) // Quantas vezes o cliente abriu o link
+
+  // Relacionamentos
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id])
+
+  items       ProposalItem[] // Lista de itens detalhada
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ------------------------------------------------------
+// 4. ITENS DO ORÇAMENTO (DETALHES)
+// ------------------------------------------------------
+// Permite saber quanto é peça e quanto é mão de obra
+model ProposalItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  
+  // Tipo do item (Material ou Serviço?)
+  type        ItemType @default(SERVICE)
+
+  proposalId  String
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+}
+
+// ------------------------------------------------------
+// ENUMS (OPÇÕES PADRONIZADAS DO POSTGRES)
+// ------------------------------------------------------
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ProposalStatus {
+  DRAFT     // Rascunho
+  SENT      // Enviado (Link gerado)
+  VIEWED    // Cliente viu
+  APPROVED  // Fechou!
+  REJECTED  // Não fechou
+  PAID      // Dinheiro na conta
+}
+
+enum ItemType {
+  SERVICE   // Mão de obra
+  MATERIAL  // Peças
+  OTHER
+}
