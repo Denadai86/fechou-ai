@@ -18,6 +18,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DashboardControls } from "@/components/DashboardControls";
 import { ProposalStatus, Prisma } from "@prisma/client";
+import { PlanUsage } from "@/components/PlanUsage";
 
 interface PageProps {
   searchParams: Promise<{ 
@@ -111,7 +112,9 @@ export default async function DashboardPage(props: PageProps) {
       </nav>
 
       <main className="max-w-7xl mx-auto px-6">
-        
+
+      <PlanUsage />
+
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-900 leading-none">Visão Geral</h1>
