@@ -7,34 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ------------------------------------------------------
-// 1. O USUÁRIO
-// ------------------------------------------------------
+// ======================================================
+// 1. O USUÁRIO (VOCÊ / PRESTADOR)
+// ======================================================
 model User {
-  id               String   @id // ID do Clerk
+  id               String   @id // ID do Clerk (Autenticação)
   email            String   @unique
   name             String?
   
-  // -- Identidade --
+  // --- Identidade Visual (Sua Marca) ---
   companyName      String?
   logoUrl          String?
   themeColor       String   @default("#2563EB")
   
-  // -- Contato --
+  // --- Seus Dados de Contato ---
   phone            String?
   address          String?
   cpfCnpj          String?
 
-  // -- Financeiro --
+  // --- Seus Dados Financeiros (Para receber do cliente) ---
   pixKey           String?
   pixHolder        String?
   bankDetails      String?
   signature        String?  @default("Agradecemos a preferência!")
   
-  // -- SaaS --
+  // --- ASSINATURA SAAS (Você pagando o Fechou-AI) ---
   plan             Plan     @default(FREE)
-  stripeCustomerId String?
-  credits          Int      @default(10)
+  
+  // Integração Mercado Pago (NOVO)
+  subscriptionId   String?  @unique // ID da assinatura (preapproval_id)
+  subscriptionStatus String?        // status: authorized, pending, cancelled
+  currentPeriodEnd DateTime?        // Data que vence o plano PRO
+
+  // Controle de Limites (NOVO)
+  // Se estiver preenchido (ex: 10), usa esse número. Se null, usa regra padrão (3).
+  customMonthlyLimit Int? 
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -43,9 +50,9 @@ model User {
   clients          Client[]
 }
 
-// ------------------------------------------------------
-// 2. O CLIENTE
-// ------------------------------------------------------
+// ======================================================
+// 2. O CLIENTE (SEU CRM)
+// ======================================================
 model Client {
   id        String   @id @default(cuid())
   name      String
@@ -63,27 +70,32 @@ model Client {
   updatedAt DateTime @updatedAt
 }
 
-// ------------------------------------------------------
-// 3. O ORÇAMENTO
-// ------------------------------------------------------
+// ======================================================
+// 3. O ORÇAMENTO (A PROPOSTA)
+// ======================================================
 model Proposal {
   id            String         @id @default(cuid())
-  // MOVIDO PARA CÁ (Onde deve estar):
-  numero        Int            @default(autoincrement()) 
-  publicId      String         @unique @default(cuid())
   
+  // Identificadores Públicos
+  numero        Int            @default(autoincrement()) // Sequencial (1, 2, 3...)
+  publicId      String         @unique @default(cuid())  // ID técnico seguro
+  slug          String?        @unique                   // Link bonito (joao-reforma-102)
+  
+  // Dados do Serviço
   title         String
   description   String?        @db.Text
   totalAmount   Decimal        @db.Decimal(10, 2)
   validity      Int            @default(15)
 
+  // Auditoria da IA (Opcional)
   audioUrl      String?
   transcription String?        @db.Text
   
-  // STATUS CORRIGIDO: Padrão PENDENTE
+  // Controle de Status
   status        ProposalStatus @default(PENDENTE)
   viewCount     Int            @default(0)
 
+  // Relacionamentos
   userId        String
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -98,12 +110,11 @@ model Proposal {
   @@index([userId])
 }
 
-// ------------------------------------------------------
-// 4. ITENS
-// ------------------------------------------------------
+// ======================================================
+// 4. ITENS DO ORÇAMENTO
+// ======================================================
 model ProposalItem {
   id          String   @id @default(cuid())
-  // Removidos 'numero' e 'publicId' daqui pois pertencem à Proposal
   
   description String
   quantity    Int      @default(1)
@@ -116,21 +127,20 @@ model ProposalItem {
   proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 }
 
-// ------------------------------------------------------
-// ENUMS
-// ------------------------------------------------------
+// ======================================================
+// ENUMS (OPÇÕES FIXAS)
+// ======================================================
+
 enum Plan {
   FREE
   PRO
-  ENTERPRISE
 }
 
-// Enum Simplificado e Alinhado com o Código
 enum ProposalStatus {
-  PENDENTE
-  APROVADO
-  PAGO
-  REJEITADO
+  PENDENTE  // Amarelo: Criado
+  APROVADO  // Azul: Cliente aceitou no Zap
+  PAGO      // Verde: Dinheiro na conta
+  REJEITADO // Vermelho: Cliente não quis
 }
 
 enum ItemType {

@@ -1,9 +1,12 @@
+//src/app/dashboard/novo/page.tsx
+
 "use client";
 
 import { useState, useRef } from "react";
 import { Mic, Square, ArrowLeft, Loader2, Keyboard, TextCursorInput, Cpu } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UpgradeModal } from "@/components/UpgradeModal"; // Importe o modal
 
 export default function NovoOrcamento() {
   const router = useRouter();
@@ -13,12 +16,13 @@ export default function NovoOrcamento() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [textContent, setTextContent] = useState("");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false); // NOVO
 
-  // Refs para áudio (mantém os dados sem recriar a renderização)
+  // Refs para áudio
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // --- 1. LÓGICA DE GRAVAÇÃO (MICROFONE) ---
+  // --- 1. LÓGICA DE GRAVAÇÃO ---
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -32,11 +36,7 @@ export default function NovoOrcamento() {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
         const audioFile = new File([audioBlob], "gravacao.webm", { type: "audio/webm" });
-        
-        // Desliga as faixas de áudio para soltar o microfone
         stream.getTracks().forEach(track => track.stop());
-        
-        // Envia para a IA
         sendToAI(audioFile, null);
       };
 
@@ -59,30 +59,32 @@ export default function NovoOrcamento() {
     isRecording ? stopRecording() : startRecording();
   };
 
-  // --- 2. LÓGICA DE ENVIO (CONEXÃO COM API E REDIRECIONAMENTO) ---
+  // --- 2. LÓGICA DE ENVIO (COM TRATAMENTO DO PAYWALL) ---
   const sendToAI = async (audioFile: File | null, text: string | null) => {
-    setIsProcessing(true); // Liga o loader
+    setIsProcessing(true);
 
     try {
       const formData = new FormData();
       if (audioFile) formData.append("audio", audioFile);
       if (text) formData.append("text", text);
 
-      // Chamada ao Backend (Gemini + Banco de Dados)
       const response = await fetch("/api/orcamento", {
         method: "POST",
         body: formData,
       });
 
+      // Se for 403, significa que estourou o limite -> Abre Modal
+      if (response.status === 403) {
+        setIsProcessing(false);
+        setShowUpgradeModal(true);
+        return;
+      }
+
       if (!response.ok) throw new Error("Erro ao comunicar com a IA");
 
       const data = await response.json();
       
-      console.log("💰 Orçamento Criado:", data);
-
       if (data.id) {
-        // SUCESSO! Redireciona para a página do orçamento
-        // Mantemos isProcessing = true para o loader não sumir durante a navegação
         router.push(`/dashboard/orcamento/${data.id}`);
       } else {
         throw new Error("A API não retornou um ID válido.");
@@ -90,15 +92,14 @@ export default function NovoOrcamento() {
 
     } catch (error) {
       console.error(error);
-      alert("Ops! Ocorreu um erro ao gerar seu orçamento. Tente novamente.");
-      setIsProcessing(false); // Só desliga o loader se der erro
+      alert("Ops! Ocorreu um erro ao gerar. Tente novamente.");
+      setIsProcessing(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
       
-      {/* HEADER */}
       <nav className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
           <Link href="/dashboard" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
@@ -110,7 +111,7 @@ export default function NovoOrcamento() {
 
       <main className="max-w-3xl mx-auto px-4 py-8 flex flex-col items-center">
         
-        {/* SELETOR DE MODO (Some se estiver processando) */}
+        {/* SELETOR DE MODO */}
         {!isProcessing && (
           <div className="flex bg-slate-200 p-1 rounded-full mb-8 shadow-inner animate-in fade-in slide-in-from-top-4">
             <button 
@@ -128,7 +129,7 @@ export default function NovoOrcamento() {
           </div>
         )}
 
-        {/* TELA DE PROCESSAMENTO (IA PENSANDO) */}
+        {/* TELA DE PROCESSAMENTO */}
         {isProcessing && (
            <div className="w-full bg-white rounded-3xl p-12 shadow-lg border border-slate-200 text-center mb-8 animate-in fade-in duration-500">
               <div className="flex flex-col items-center gap-6">
@@ -151,7 +152,6 @@ export default function NovoOrcamento() {
         {/* --- MODO VOZ --- */}
         {!isProcessing && mode === "voice" && (
           <div className="flex flex-col items-center w-full animate-in slide-in-from-bottom-4 duration-300">
-             {/* Card de Instrução */}
              <div className="w-full bg-blue-50/50 rounded-3xl p-8 border border-blue-100 text-center mb-8">
                 <div className="space-y-4">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-blue-600 text-xs font-bold uppercase tracking-wider shadow-sm">
@@ -165,7 +165,6 @@ export default function NovoOrcamento() {
                 </div>
              </div>
 
-             {/* Botão de Gravar */}
              <div className="relative flex flex-col items-center group">
                 {isRecording && (
                   <div className="absolute -inset-8 bg-red-100 rounded-full animate-ping opacity-50 -z-10"></div>
@@ -174,8 +173,8 @@ export default function NovoOrcamento() {
                   onClick={toggleRecording}
                   className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-95 hover:scale-105 cursor-pointer border-4 ${
                     isRecording 
-                        ? "bg-red-500 hover:bg-red-600 border-red-200" 
-                        : "bg-blue-600 hover:bg-blue-700 border-blue-200"
+                      ? "bg-red-500 hover:bg-red-600 border-red-200" 
+                      : "bg-blue-600 hover:bg-blue-700 border-blue-200"
                   }`}
                 >
                   {isRecording ? <Square className="text-white w-8 h-8 fill-current" /> : <Mic className="text-white w-10 h-10" />}
@@ -210,6 +209,13 @@ export default function NovoOrcamento() {
              </button>
           </div>
         )}
+
+        {/* --- MODAL DE UPGRADE --- */}
+        <UpgradeModal 
+          isOpen={showUpgradeModal} 
+          onClose={() => setShowUpgradeModal(false)} 
+        />
+
       </main>
     </div>
   );

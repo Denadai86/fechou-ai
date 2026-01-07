@@ -1,10 +1,8 @@
-//src/app/dashboard/perfil/PerfilForm.tsx
-
 "use client";
 
 import { useState, useRef } from "react";
-import { Save, Loader2, Building2, Wallet, Contact, Upload, X, ImageIcon } from "lucide-react";
-import { salvarPerfil } from "./actions";
+import { Save, Loader2, Building2, Wallet, Contact, Upload, X, ImageIcon, Trash2 } from "lucide-react";
+import { salvarPerfil, excluirConta } from "./actions"; // <--- Importe o excluirConta
 import { upload } from "@vercel/blob/client";
 
 export function PerfilForm({ initialData }: any) {
@@ -13,7 +11,7 @@ export function PerfilForm({ initialData }: any) {
   const [logoUrl, setLogoUrl] = useState(initialData?.logoUrl || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Função para lidar com o Upload da Logomarca
+  // --- 1. Lógica da Logo ---
   async function handleLogoUpload() {
     if (!fileInputRef.current?.files?.[0]) return;
 
@@ -28,16 +26,16 @@ export function PerfilForm({ initialData }: any) {
 
       setLogoUrl(newBlob.url);
     } catch (error) {
-      alert("Erro ao subir imagem.");
+      alert("Erro ao subir imagem. Tente um arquivo menor ou JPG/PNG.");
       console.error(error);
     } finally {
       setIsUploading(false);
     }
   }
 
+  // --- 2. Lógica de Salvar ---
   async function handleSubmit(formData: FormData) {
     setLoading(true);
-    // Injetamos a URL da logo no formData antes de enviar para a action
     if (logoUrl) formData.set("logoUrl", logoUrl);
     
     try {
@@ -51,10 +49,26 @@ export function PerfilForm({ initialData }: any) {
     }
   }
 
+  // --- 3. Lógica de Excluir (Zona de Perigo) ---
+  const handleDeleteAccount = async () => {
+    const confirmation = window.prompt("⚠️ ATENÇÃO: Isso apagará TODOS os seus dados, clientes e orçamentos para sempre.\n\nPara confirmar, digite: DELETAR");
+    
+    if (confirmation === "DELETAR") {
+        try {
+            await excluirConta();
+            // Redireciona para a home após excluir
+            window.location.href = "/";
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao excluir conta. Tente novamente.");
+        }
+    }
+  };
+
   return (
-    <form action={handleSubmit} className="space-y-8">
+    <form action={handleSubmit} className="space-y-8 pb-10">
       
-      {/* BLOCO 0: LOGOMARCA (O novo astro!) */}
+      {/* BLOCO LOGOMARCA */}
       <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-6 text-orange-600">
             <ImageIcon size={20} />
@@ -62,10 +76,10 @@ export function PerfilForm({ initialData }: any) {
         </div>
         
         <div className="flex items-center gap-6">
-            <div className="relative w-32 h-32 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden bg-slate-50">
+            <div className="relative w-32 h-32 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
                 {logoUrl ? (
                     <>
-                        <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                        <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
                         <button 
                             type="button" 
                             onClick={() => setLogoUrl("")}
@@ -82,16 +96,16 @@ export function PerfilForm({ initialData }: any) {
                 )}
             </div>
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 <p className="text-sm text-slate-500 mb-3">
-                    Sua logo aparecerá no topo de todos os orçamentos e nos links compartilhados.
+                    Sua logo aparecerá no topo de todos os orçamentos e nos links compartilhados no WhatsApp.
                 </p>
                 <input 
                     type="file" 
                     ref={fileInputRef} 
                     onChange={handleLogoUpload} 
                     className="hidden" 
-                    accept="image/*" 
+                    accept="image/png, image/jpeg, image/jpg, image/webp" 
                 />
                 <button 
                     type="button"
@@ -100,13 +114,13 @@ export function PerfilForm({ initialData }: any) {
                     className="bg-white border-2 border-slate-200 hover:border-blue-500 hover:text-blue-600 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
                 >
                     {isUploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-                    {logoUrl ? "Alterar Logo" : "Escolher Imagem"}
+                    {logoUrl ? "Trocar Imagem" : "Escolher Imagem"}
                 </button>
             </div>
         </div>
       </section>
 
-      {/* BLOCO 1: IDENTIDADE */}
+      {/* BLOCO IDENTIDADE */}
       <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-6 text-blue-600">
             <Building2 size={20} />
@@ -129,7 +143,7 @@ export function PerfilForm({ initialData }: any) {
         </div>
       </section>
 
-      {/* BLOCO 2: CONTATO */}
+      {/* BLOCO CONTATO */}
       <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-6 text-green-600">
             <Contact size={20} />
@@ -143,7 +157,7 @@ export function PerfilForm({ initialData }: any) {
         </div>
       </section>
 
-      {/* BLOCO 3: FINANCEIRO (PIX) */}
+      {/* BLOCO FINANCEIRO */}
       <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-6 text-purple-600">
             <Wallet size={20} />
@@ -165,10 +179,34 @@ export function PerfilForm({ initialData }: any) {
         </div>
       </section>
 
-      <button disabled={loading || isUploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 flex items-center justify-center gap-2 disabled:opacity-70 transition-all active:scale-95 uppercase tracking-widest text-sm">
+      {/* BOTÃO SALVAR */}
+      <button disabled={loading || isUploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 flex items-center justify-center gap-2 disabled:opacity-70 transition-all active:scale-95 uppercase tracking-widest text-sm mb-12">
         {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
         Salvar Tudo
       </button>
+
+      {/* --- ZONA DE PERIGO (NOVO) --- */}
+      <div className="border-t-2 border-red-100 pt-8 mt-12 bg-red-50/50 p-6 rounded-2xl">
+         <div className="flex items-center gap-2 text-red-600 mb-4">
+            <Trash2 size={20} />
+            <h3 className="font-bold text-lg uppercase tracking-widest">Zona de Perigo</h3>
+         </div>
+         
+         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="text-sm text-red-800/80">
+                <p className="font-bold">Deseja excluir sua conta?</p>
+                <p>Ao fazer isso, todos os seus orçamentos, clientes e dados serão apagados permanentemente e não poderão ser recuperados.</p>
+            </div>
+            <button 
+                type="button"
+                onClick={handleDeleteAccount}
+                className="whitespace-nowrap bg-white border border-red-200 text-red-600 hover:bg-red-600 hover:text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm"
+            >
+                Excluir Conta
+            </button>
+         </div>
+      </div>
+
     </form>
   );
 }
