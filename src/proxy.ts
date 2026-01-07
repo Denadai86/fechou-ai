@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/api(.*)', 
   '/dashboard/(.*)', // Exemplo de rota pública adicional
   '/teste(.*)', // Rota de teste pública
+  '/p/(.*)', // Páginas públicas de orçamentos
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
