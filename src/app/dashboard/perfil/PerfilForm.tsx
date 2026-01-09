@@ -1,11 +1,16 @@
+//src/app/dashboard/perfil/PerfilForm.tsx
+
 "use client";
 
 import { useState, useRef } from "react";
-import { Save, Loader2, Building2, Wallet, Contact, Upload, X, ImageIcon, Trash2 } from "lucide-react";
-import { salvarPerfil, excluirConta } from "./actions"; // <--- Importe o excluirConta
+import { useRouter } from "next/navigation"; // 1. Import necessário para redirecionar
+import Link from "next/link"; // 2. Import para o botão voltar
+import { Save, Loader2, Building2, Wallet, Contact, Upload, X, ImageIcon, Trash2, ArrowLeft } from "lucide-react";
+import { salvarPerfil, excluirConta } from "./actions";
 import { upload } from "@vercel/blob/client";
 
 export function PerfilForm({ initialData }: any) {
+  const router = useRouter(); // 3. Inicializa o roteador
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(initialData?.logoUrl || "");
@@ -33,14 +38,21 @@ export function PerfilForm({ initialData }: any) {
     }
   }
 
-  // --- 2. Lógica de Salvar ---
+  // --- 2. Lógica de Salvar com Redirecionamento ---
   async function handleSubmit(formData: FormData) {
     setLoading(true);
     if (logoUrl) formData.set("logoUrl", logoUrl);
     
     try {
       await salvarPerfil(formData);
-      alert("Perfil salvo com sucesso!");
+      
+      // Feedback visual rápido (opcional, pode tirar se quiser ir direto)
+      // alert("Perfil salvo com sucesso!"); 
+
+      // 4. MÁGICA ACONTECE AQUI: Redireciona para o Dashboard
+      router.push("/dashboard");
+      router.refresh(); // Garante que o dashboard carregue com os dados novos (nome da empresa, logo, etc)
+
     } catch (error) {
       alert("Erro ao salvar.");
       console.error(error);
@@ -49,14 +61,13 @@ export function PerfilForm({ initialData }: any) {
     }
   }
 
-  // --- 3. Lógica de Excluir (Zona de Perigo) ---
+  // --- 3. Lógica de Excluir ---
   const handleDeleteAccount = async () => {
     const confirmation = window.prompt("⚠️ ATENÇÃO: Isso apagará TODOS os seus dados, clientes e orçamentos para sempre.\n\nPara confirmar, digite: DELETAR");
     
     if (confirmation === "DELETAR") {
         try {
             await excluirConta();
-            // Redireciona para a home após excluir
             window.location.href = "/";
         } catch (error) {
             console.error(error);
@@ -179,13 +190,32 @@ export function PerfilForm({ initialData }: any) {
         </div>
       </section>
 
-      {/* BOTÃO SALVAR */}
-      <button disabled={loading || isUploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 flex items-center justify-center gap-2 disabled:opacity-70 transition-all active:scale-95 uppercase tracking-widest text-sm mb-12">
-        {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-        Salvar Tudo
-      </button>
+      {/* --- ÁREA DE BOTÕES (Refatorada) --- */}
+      <div className="flex flex-col-reverse md:flex-row gap-4 mb-12">
+        {/* Botão Voltar */}
+        <Link href="/dashboard" className="w-full md:w-auto">
+            <button 
+                type="button" 
+                className="w-full md:w-auto bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold py-5 px-8 rounded-2xl flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-sm"
+            >
+                <ArrowLeft size={20} />
+                Voltar
+            </button>
+        </Link>
 
-      {/* --- ZONA DE PERIGO (NOVO) --- */}
+        {/* Botão Salvar */}
+        <button 
+            type="submit" 
+            disabled={loading || isUploading} 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 flex items-center justify-center gap-2 disabled:opacity-70 transition-all active:scale-95 uppercase tracking-widest text-sm"
+        >
+            {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+            Salvar Tudo
+        </button>
+      </div>
+
+
+      {/* --- ZONA DE PERIGO --- */}
       <div className="border-t-2 border-red-100 pt-8 mt-12 bg-red-50/50 p-6 rounded-2xl">
          <div className="flex items-center gap-2 text-red-600 mb-4">
             <Trash2 size={20} />
@@ -195,7 +225,7 @@ export function PerfilForm({ initialData }: any) {
          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="text-sm text-red-800/80">
                 <p className="font-bold">Deseja excluir sua conta?</p>
-                <p>Ao fazer isso, todos os seus orçamentos, clientes e dados serão apagados permanentemente e não poderão ser recuperados.</p>
+                <p>Ao fazer isso, todos os seus orçamentos, clientes e dados serão apagados permanentemente.</p>
             </div>
             <button 
                 type="button"

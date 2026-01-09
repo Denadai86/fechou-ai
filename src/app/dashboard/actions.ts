@@ -17,52 +17,51 @@ export async function criarCheckoutAssinatura() {
   if (!process.env.MP_ACCESS_TOKEN) throw new Error("Token MP ausente.");
 
   const emailUser = user.emailAddresses[0]?.emailAddress;
-  
   const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
   const subscription = new PreApproval(client);
 
-  let urlParaRedirecionar = "";
+  // 1. Criamos uma variável para guardar a URL fora do bloco try
+  let checkoutUrl: string | undefined;
 
   try {
-    console.log("🚀 Gerando Link de Assinatura...");
-
     const response = await subscription.create({
       body: {
         reason: "Assinatura Fechou-AI PRO",
         external_reference: userId,
-        payer_email: emailUser, // Pode voltar para o email real agora
+        payer_email: emailUser,
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
           transaction_amount: 29.90,
           currency_id: "BRL"
         },
-        // Volta para a variável de ambiente (URL Real)
+        // Certifique-se que essa URL no .env NÃO termina com /
         back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       }
     });
 
-    console.log("✅ Resposta MP:", response.init_point);
-
     if (response.init_point) {
-       // Guardamos a URL para usar FORA do try/catch
-       urlParaRedirecionar = response.init_point;
+      checkoutUrl = response.init_point;
     } else {
-       throw new Error("O Mercado Pago não devolveu o link.");
+      console.error("Resposta sem init_point:", response);
     }
 
   } catch (error: any) {
-    console.error("❌ Erro MP:", JSON.stringify(error, null, 2));
-    const msg = error.message || "Falha ao criar assinatura.";
-    throw new Error(`Erro MP: ${msg}`);
+    // Aqui capturamos erros REAIS da API
+    console.error("❌ Erro na API do Mercado Pago:", error);
+    // Não damos throw aqui para não travar o Next.js, 
+    // apenas retornamos um erro para o componente tratar se quiser
   }
 
-  // AQUI É O LUGAR CERTO DO REDIRECT
-  // O Next.js precisa que isso aconteça fora do bloco try/catch
-  if (urlParaRedirecionar) {
-      redirect(urlParaRedirecionar);
+  // 2. O REDIRECT PRECISA ESTAR FORA DO TRY/CATCH
+  if (checkoutUrl) {
+    redirect(checkoutUrl);
   }
+
+  // 3. Se chegou aqui, algo deu errado e não redirecionou
+  throw new Error("Não foi possível gerar o link de pagamento. Tente novamente.");
 }
+
 
 
 

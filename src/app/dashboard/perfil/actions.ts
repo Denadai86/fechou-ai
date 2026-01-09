@@ -4,6 +4,8 @@
 import { prisma } from "@/lib/prisma";
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { MercadoPagoConfig, PreApproval } from 'mercadopago';
+
 
 export async function salvarPerfil(formData: FormData) {
   // 1. Autenticação completa (ID + Dados do User para pegar o email)
@@ -106,4 +108,67 @@ export async function excluirConta() {
         console.error("Erro crítico ao excluir conta:", error);
         throw new Error("Falha ao remover os dados. Tente novamente.");
     }
+
+
+}
+
+export async function buscarDadosAssinatura() {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
+  const preApproval = new PreApproval(client);
+
+  try {
+    // No SDK v2, passamos os critérios de busca diretamente no objeto de opções
+    const search = await preApproval.search({
+      options: {
+        external_reference: userId,
+      }
+    });
+
+    // Pegamos a assinatura mais recente (index 0)
+    const assinatura = search.results?.[0];
+    
+    if (!assinatura) return null;
+
+    return {
+      id: assinatura.id,
+      status: assinatura.status, // authorized, paused, cancelled, pending
+      proximoPagamento: assinatura.next_payment_date,
+      valor: assinatura.auto_recurring?.transaction_amount,
+      linkPagamento: assinatura.init_point
+    };
+  } catch (error) {
+    console.error("Erro ao buscar assinatura no MP:", error);
+    return null;
+  }
+}
+
+export async function cancelarAssinatura(idAssinatura: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Não autorizado");
+
+  const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
+  const preApproval = new PreApproval(client);
+
+  try {
+    // No Mercado Pago, cancelamos atualizando o status para 'cancelled'
+    await preApproval.update({
+      id: idAssinatura,
+      body: { status: "cancelled" }
+    });
+
+    // Atualiza nosso banco para refletir o cancelamento imediatamente
+    await prisma.user.update({
+      where: { id: userId },
+      data: { plan: "FREE", subscriptionStatus: "cancelled" }
+    });
+
+    revalidatePath("/dashboard/perfil");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao cancelar no MP:", error);
+    throw new Error("Falha ao cancelar assinatura.");
+  }
 }
